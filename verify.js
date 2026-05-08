@@ -16,10 +16,10 @@ const MESSAGES = {
   publicPending: (user) => `${user} 님의 인증 요청이 접수되었어요!\n관리자 확인 후 승인해 드릴게요. 평일 기준 1일 이내에 처리되니 조금만 기다려 주세요:)`,
   adminRequest: (user) => `${user} (${user.tag}) 님이 인증을 요청했습니다.`,
   adminApproved: (member, label) => `${member} [${label}] 승인 완료.`,
-  publicApproved: (member, label) => `${member} 님의 [${label}] 인증이 승인되었어요! Do it! 스터디 멤버가 되신 걸 진심으로 환영합니다🎉`,
-  dmApproved: (label) => `🎉 [${label}] 인증이 완료되었어요!\nDo it! 스터디 멤버가 되신 걸 진심으로 환영합니다:)\n자세한 스터디 일정과 내용은 [${label}] 채널 공지를 확인해 주세요.\n함께 끝까지 가실 거죠? 잘 부탁드립니다!!`,
+  publicApproved: (member, label) => `${member} 님의 [${label}] 인증이 승인되었어요!\nDo it! 스터디 멤버가 되신 걸 진심으로 환영합니다🎉`,
+  dmApproved: (label) => `[${label}] 인증이 완료되었어요!\nDo it! 스터디 멤버가 되신 걸 진심으로 환영합니다:)\n자세한 스터디 일정과 내용은 [${label}] 채널 공지를 확인해 주세요.\n함께 끝까지 가실 거죠? 잘 부탁드립니다~`,
   adminDenied: (member) => `${member} 거부됨.`,
-  publicDenied: (member) => `${member} 님의 인증이 거부되었어요😢\n인증 이미지를 다시 한번 확인해 주시겠어요? 재신청 언제든 가능해요!`,
+  publicDenied: (member) => `${member} 님의 인증이 거부되었어요😢\n인증 이미지를 다시 한번 확인해 주시겠어요? 재신청은 언제든 가능해요!`,
   dmDenied: '아쉽게도 이번 인증은 승인이 어려웠어요😢\n인증 이미지를 다시 한번 확인해서 재신청해 주시겠어요?\n문의가 있으시다면 언제든 신청 채널에서 편하게 말씀해 주세요.',
   roleError: '역할 부여에 실패했습니다. 봇 권한 또는 역할 순서를 확인해주세요.',
 };
