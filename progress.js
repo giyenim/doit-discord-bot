@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const cron = require('node-cron');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, SlashCommandBuilder, MessageFlags } = require('discord.js');
 
 const TIMEZONE = 'Asia/Seoul';
 
@@ -99,10 +99,65 @@ function init(client) {
   }
 }
 
-const commands = [];
+const commands = [
+  new SlashCommandBuilder()
+    .setName('진도')
+    .setDescription('오늘 스터디 진도를 확인합니다 (본인에게만 보임)')
+    .toJSON(),
+];
 
-async function handle() {
-  return;
+function findStudyByChannel(channelId) {
+  for (const [optKey, study] of Object.entries(STUDIES)) {
+    if (study.channelId && study.channelId === channelId) {
+      return { optKey, study };
+    }
+  }
+  return null;
+}
+
+async function handle(interaction) {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== '진도') {
+    return;
+  }
+
+  const match = findStudyByChannel(interaction.channelId);
+  if (!match) {
+    await interaction.reply({
+      content: '이 명령어는 스터디 채널에서만 사용할 수 있어요.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const { optKey, study } = match;
+  const dateKey = todayInSeoul();
+
+  let data;
+  try {
+    data = loadProgress(study.dataFile);
+  } catch (err) {
+    console.error(`[진도] ${optKey} 데이터 파일 로드 실패:`, err.message);
+    await interaction.reply({
+      content: '진도 정보를 불러오지 못했어요. 😵 잠시 후 다시 시도해주세요.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const entry = data[dateKey];
+  if (!entry) {
+    await interaction.reply({
+      content: `오늘(${dateKey})은 진도가 없는 날이에요.\n그동안 배운 내용을 복습하거나, 잠시 숨 고르는 시간을 가져보세요.`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  const embed = buildEmbed(study, dateKey, entry);
+  await interaction.reply({
+    embeds: [embed],
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
 module.exports = { commands, handle, init, previewForToday };

@@ -81,3 +81,5 @@ node index.js
 ```powershell
 node -e "require('dotenv').config(); console.log(JSON.stringify(require('./progress').previewForToday('opt1'), null, 2))"
 ```
+
+**`/진도` 사용자 명령어:** 사용자가 본인에게만 보이도록(ephemeral) 오늘 진도를 확인합니다. 명령어를 실행한 채널 ID로 어느 스터디인지 판별 (`PROGRESS_CHANNEL_ID_OPTION_1/2`와 매칭). 두 채널 중 어느 것도 아니면 차단 안내, 오늘 항목이 없으면 "오늘은 진도가 없어요" 안내.
