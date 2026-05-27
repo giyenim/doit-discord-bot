@@ -3,10 +3,13 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes } = require('discord.js');
 const verify = require('./verify');
 const progress = require('./progress');
+const mission = require('./mission');
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+});
 
-const commands = [...verify.commands, ...progress.commands];
+const commands = [...verify.commands, ...progress.commands, ...mission.commands];
 
 client.once('clientReady', async () => {
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
@@ -21,6 +24,7 @@ client.once('clientReady', async () => {
 client.on('interactionCreate', async (interaction) => {
   await verify.handle(interaction);
   await progress.handle(interaction);
+  await mission.handle(interaction);
 });
 
 client.login(process.env.DISCORD_TOKEN);

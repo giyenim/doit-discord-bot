@@ -64,6 +64,7 @@ node index.js
 ```json
 {
   "2026-05-25": {
+    "week": 1,
     "title": "5주차: Attention 메커니즘",
     "body": "자료: https://...\n과제: ..."
   }
@@ -71,6 +72,8 @@ node index.js
 ```
 
 해당 날짜에 키가 없으면 조용히 스킵합니다. JSON은 매 발사 시 다시 읽어서 봇 재시작 없이 추가/수정이 반영됩니다.
+
+`week` 필드는 `progress.js` 자체는 사용하지 않으며, `mission.js`가 "이번 주차"를 파생할 때 참조합니다. 진도 데이터를 새로 추가할 때 `week`를 같이 채워 두세요.
 
 **스케줄러:** `node-cron`, 타임존 `Asia/Seoul`. 두 스터디 각각 독립된 cron job. 봇이 꺼져 있던 시각의 알림은 사후 발송하지 않습니다.
 
@@ -83,3 +86,26 @@ node -e "require('dotenv').config(); console.log(JSON.stringify(require('./progr
 ```
 
 **`/진도` 사용자 명령어:** 사용자가 본인에게만 보이도록(ephemeral) 오늘 진도를 확인합니다. 명령어를 실행한 채널 ID로 어느 스터디인지 판별 (`PROGRESS_CHANNEL_ID_OPTION_1/2`와 매칭). 두 채널 중 어느 것도 아니면 차단 안내, 오늘 항목이 없으면 "오늘은 진도가 없어요" 안내.
+
+## 미션 현황 기능 (`mission.js`)
+
+`/미션현황` 슬래시 커맨드로 사용자가 본인에게만 보이도록(ephemeral) 이번 주 스터디 미션 완료 현황을 확인합니다. 표시: 이번 주 챕터, 전체 완료율(`78% (7/9명)`), 본인 완료 여부, 완료/미완료 멤버 명단(닉네임, 길면 "외 N명").
+
+**채널 정책:** `/진도`와 동일하게 `PROGRESS_CHANNEL_ID_OPTION_1/2`에서만 실행 가능. 다른 채널에서는 차단 안내.
+
+**전체 인원 정의:** `ROLE_ID_OPTION_1/2` 역할 보유자 전원. `guild.members.fetch()` 호출이 필요해 **`GuildMembers` privileged intent**가 활성화되어 있어야 합니다 (`index.js`의 클라이언트 intents + Discord Developer Portal → Bot → "Server Members Intent" 토글 둘 다 필요).
+
+**데이터:** `data/mission-option1.json`, `data/mission-option2.json` — 주차 번호(문자열) 키.
+
+```json
+{
+  "1": { "chapters": "1장 ~ 5장", "completed": ["디스코드_userId1", "디스코드_userId2"] },
+  "2": { "chapters": "6장 ~ 7장", "completed": [] }
+}
+```
+
+`chapters`는 스크린에 표시되는 미션 범위 라벨(자유 텍스트), `completed`는 완료한 멤버의 디스코드 user ID 배열. 현재 1차 구현은 **수기 관리** — 운영자가 JSON을 직접 편집합니다 (관리 UI는 추후 별도 명령으로 추가 예정).
+
+**주차 파생 규칙:** 진도 JSON에서 "오늘 ≤ 가장 가까운 날짜" 항목의 `week` 값을 "이번 주차"로 사용. 주말/공휴일에 실행해도 직전 평일의 주차가 잡힙니다. 진도 시작 전이면 안내 메시지, 해당 주차 미션 키가 미션 JSON에 없으면 별도 안내.
+
+진도 JSON과 마찬가지로 매 요청마다 다시 읽어서 봇 재시작 없이 반영됩니다.
