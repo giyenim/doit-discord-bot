@@ -118,12 +118,14 @@ async function runMissionStatus(interaction, optKey, study) {
   const weekEntry = missionData[String(week)];
   if (!weekEntry) {
     await interaction.editReply({
-      content: `[${study.label}] ${week}주차 미션이 아직 등록되지 않았어요.`,
+      content: `[${study.label}] ${week}주차 미션 데이터를 찾을 수 없어요. 관리자에게 문의해 주세요.`,
     });
     return;
   }
 
-  await interaction.guild.members.fetch();
+  if (interaction.guild.members.cache.size < interaction.guild.memberCount) {
+    await interaction.guild.members.fetch();
+  }
   const role = await interaction.guild.roles.fetch(study.roleId);
   if (!role) {
     await interaction.editReply({
