@@ -60,12 +60,46 @@ function currentWeek(progressData, today) {
   return Number.isInteger(week) ? week : null;
 }
 
-function formatMemberList(displayNames, maxShown = 3) {
-  if (displayNames.length === 0) return '없음';
-  if (displayNames.length <= maxShown) return displayNames.join(', ');
-  const shown = displayNames.slice(0, maxShown).join(', ');
-  const rest = displayNames.length - maxShown;
-  return `${shown} 외 ${rest}명`;
+function missingWeeksFor(userId, missionData, currentWeek) {
+  const missing = [];
+  for (let w = 1; w <= currentWeek; w++) {
+    const entry = missionData[String(w)];
+    if (!entry) continue;
+    const completed = entry.completed || [];
+    if (!completed.includes(userId)) missing.push(w);
+  }
+  return missing;
+}
+
+function studyProgress(missionData, roleMemberIds) {
+  const weekKeys = Object.keys(missionData);
+  const total = roleMemberIds.size * weekKeys.length;
+  let done = 0;
+  for (const key of weekKeys) {
+    const completed = missionData[key].completed || [];
+    for (const id of completed) {
+      if (roleMemberIds.has(id)) done++;
+    }
+  }
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  return { done, total, percent };
+}
+
+function myProgress(userId, missionData) {
+  const weekKeys = Object.keys(missionData);
+  const total = weekKeys.length;
+  let done = 0;
+  for (const key of weekKeys) {
+    const completed = missionData[key].completed || [];
+    if (completed.includes(userId)) done++;
+  }
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  return { done, total, percent };
+}
+
+function progressBar(percent, length = 10) {
+  const filled = Math.round((percent / 100) * length);
+  return '█'.repeat(filled) + '░'.repeat(length - filled);
 }
 
 const commands = [
@@ -143,36 +177,32 @@ async function runMissionStatus(interaction, optKey, study) {
     return;
   }
 
-  const completedSet = new Set(weekEntry.completed || []);
-  const completed = [];
-  const pending = [];
-  for (const member of roleMembers) {
-    if (completedSet.has(member.id)) completed.push(member);
-    else pending.push(member);
-  }
+  const roleMemberIds = new Set(roleMembers.map((m) => m.id));
+  const me = roleMembers.find((m) => m.id === interaction.user.id);
+  const myDisplayName = me.displayName;
 
-  const byName = (a, b) => a.displayName.localeCompare(b.displayName, 'ko');
-  completed.sort(byName);
-  pending.sort(byName);
+  const thisWeekDone = (weekEntry.completed || []).filter((id) => roleMemberIds.has(id)).length;
 
-  const percent = Math.round((completed.length / total) * 100);
-  const youCompleted = completedSet.has(interaction.user.id);
-  const youInStudy = roleMembers.some((m) => m.id === interaction.user.id);
+  const myMissing = missingWeeksFor(interaction.user.id, missionData, week);
+  const myLine = myMissing.length === 0
+    ? `**${myDisplayName}**님은 ${week}주차 미션까지 완료했어요. ╰(*°▽°*)╯`
+    : `**${myDisplayName}**님은 미완료 미션이 있어요. ┗( T﹏T )┛\n [미완료: ${myMissing.map((w) => `Week ${w}`).join(', ')}]`;
+
+  const { percent: studyPercent } = studyProgress(missionData, roleMemberIds);
+  const { percent: myPercent } = myProgress(interaction.user.id, missionData);
 
   const lines = [
-    `📖 **이번 주 챕터:** ${weekEntry.chapters || '(미정)'}`,
-    `📊 **전체 완료율:** ${percent}% (${completed.length}/${total}명)`,
+    myLine,
+    '',
+    `**이번 주 챕터:** ${weekEntry.chapters || '(미정)'}`,
+    `**이번 주 미션 완료 인원:** ${thisWeekDone} / ${total}명`,
+    `**내 스터디 완료율:** ${progressBar(myPercent)} ${myPercent}%`,
+    `**전체 스터디 완료율:** ${progressBar(studyPercent)} ${studyPercent}%`,
   ];
-  if (youInStudy) {
-    lines.push(`👤 **당신:** ${youCompleted ? '✅ 완료' : '⬜ 미완료'}`);
-  }
-  lines.push('');
-  lines.push(`✅ **완료 (${completed.length}명):** ${formatMemberList(completed.map((m) => m.displayName))}`);
-  lines.push(`⬜ **미완료 (${pending.length}명):** ${formatMemberList(pending.map((m) => m.displayName))}`);
 
   const embed = new EmbedBuilder()
     .setColor(study.color)
-    .setTitle(`📋 [${study.label}] ${week}주차 현황`)
+    .setTitle(`🖥️ [${study.label}] ${week}주차 현황`)
     .setDescription(lines.join('\n'))
     .setFooter({ text: `${today} 기준` });
 
@@ -182,5 +212,5 @@ async function runMissionStatus(interaction, optKey, study) {
 module.exports = {
   commands,
   handle,
-  _test: { currentWeek, formatMemberList, todayInSeoul },
+  _test: { currentWeek, todayInSeoul, missingWeeksFor, studyProgress, myProgress, progressBar },
 };
