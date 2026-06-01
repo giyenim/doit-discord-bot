@@ -26,6 +26,9 @@ node index.js
 | `PROGRESS_CRON_OPTION_1` | 옵션1 진도 알림 cron 표현식 (`Asia/Seoul`, 예: `0 9 * * 1-5` = 평일 오전 9시) |
 | `PROGRESS_CHANNEL_ID_OPTION_2` | 옵션2 스터디의 진도 알림이 게시될 채널 ID |
 | `PROGRESS_CRON_OPTION_2` | 옵션2 진도 알림 cron 표현식 |
+| `MISSION_FORUM_CHANNEL_ID` | 옵션1/2 미션 인증글이 올라오는 통합 포럼 채널 ID |
+| `MISSION_FORUM_TAG_ID_OPTION_1` | 미션 포럼의 옵션1 forum tag ID |
+| `MISSION_FORUM_TAG_ID_OPTION_2` | 미션 포럼의 옵션2 forum tag ID |
 
 ## 아키텍처
 
@@ -109,3 +112,19 @@ node -e "require('dotenv').config(); console.log(JSON.stringify(require('./progr
 **주차 파생 규칙:** 진도 JSON에서 "오늘 ≤ 가장 가까운 날짜" 항목의 `week` 값을 "이번 주차"로 사용. 주말/공휴일에 실행해도 직전 평일의 주차가 잡힙니다. 진도 시작 전이면 안내 메시지, 해당 주차 미션 키가 미션 JSON에 없으면 별도 안내.
 
 진도 JSON과 마찬가지로 매 요청마다 다시 읽어서 봇 재시작 없이 반영됩니다.
+
+### `/미션승인` (관리자 전용)
+
+운영자가 `data/mission-option*.json`을 손으로 편집하지 않고, **미션 인증 포럼 스레드 안에서** 작성자의 해당 주차 완료 여부를 토글합니다.
+
+```
+/미션승인 주차:5
+```
+
+- **실행 위치:** `MISSION_FORUM_CHANNEL_ID` 포럼의 스레드 안에서만. 다른 채널/포럼에서는 차단 안내.
+- **권한:** `setDefaultMemberPermissions(Administrator)`로 등록 — Discord UI에서 비관리자에겐 명령 자체가 보이지 않습니다.
+- **작성자 식별:** 포럼 스레드의 `ownerId` (= 인증 글 작성자).
+- **옵션 판별:** 스레드 `appliedTags`에 `MISSION_FORUM_TAG_ID_OPTION_1/2` 중 **정확히 하나**가 있어야 동작. 0개/2개면 안내 메시지.
+- **주차 자동 추론은 하지 않습니다.** 미션 승인은 해당 주차가 끝난 다음 일어나므로 "오늘 기준 이번 주차"는 항상 어긋남 → 운영자가 인수로 명시.
+- **토글:** 해당 주차 `completed` 배열에 작성자 ID가 있으면 제거(취소), 없으면 추가(승인). `JSON.stringify(data, null, 2)`로 저장.
+- **응답:** 운영자에게만 보이는 ephemeral 한 줄 (`[라벨] 닉네임 N주차 승인 완료` / `... 취소`). 스레드 공개 메시지는 보내지 않습니다 — 작성자에게 안내하는 메시지는 운영자가 직접 작성합니다.

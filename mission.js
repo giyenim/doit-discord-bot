@@ -1,6 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { EmbedBuilder, SlashCommandBuilder, MessageFlags } = require('discord.js');
+const {
+  EmbedBuilder,
+  SlashCommandBuilder,
+  MessageFlags,
+  ChannelType,
+  PermissionFlagsBits,
+} = require('discord.js');
 
 const TIMEZONE = 'Asia/Seoul';
 
@@ -12,6 +18,7 @@ const STUDIES = {
     color: 0x1abc9c,
     progressFile: path.join(__dirname, 'data', 'progress-option1.json'),
     missionFile: path.join(__dirname, 'data', 'mission-option1.json'),
+    forumTagId: process.env.MISSION_FORUM_TAG_ID_OPTION_1,
   },
   opt2: {
     channelId: process.env.PROGRESS_CHANNEL_ID_OPTION_2,
@@ -20,6 +27,7 @@ const STUDIES = {
     color: 0x3498db,
     progressFile: path.join(__dirname, 'data', 'progress-option2.json'),
     missionFile: path.join(__dirname, 'data', 'mission-option2.json'),
+    forumTagId: process.env.MISSION_FORUM_TAG_ID_OPTION_2,
   },
 };
 
@@ -107,32 +115,58 @@ const commands = [
     .setName('미션현황')
     .setDescription('이번 주 스터디 미션 완료 현황을 확인합니다 (본인에게만 보임)')
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('미션승인')
+    .setDescription('인증 글 스레드 작성자의 해당 주차 미션을 토글합니다 (관리자 전용)')
+    .addIntegerOption((option) =>
+      option
+        .setName('주차')
+        .setDescription('승인/취소할 주차 번호')
+        .setRequired(true)
+        .setMinValue(1),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .toJSON(),
 ];
 
 async function handle(interaction) {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== '미션현황') {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === '미션현황') {
+    const match = findStudyByChannel(interaction.channelId);
+    if (!match) {
+      await interaction.reply({
+        content: '이 명령어는 스터디 채널에서만 사용할 수 있어요.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const { optKey, study } = match;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    try {
+      await runMissionStatus(interaction, optKey, study);
+    } catch (err) {
+      console.error(`[미션현황] ${optKey} 처리 실패:`, err);
+      await interaction.editReply({
+        content: '미션 현황을 불러오지 못했어요. 😵 잠시 후 다시 시도해주세요.',
+      }).catch(() => { });
+    }
     return;
   }
 
-  const match = findStudyByChannel(interaction.channelId);
-  if (!match) {
-    await interaction.reply({
-      content: '이 명령어는 스터디 채널에서만 사용할 수 있어요.',
-      flags: MessageFlags.Ephemeral,
-    });
+  if (interaction.commandName === '미션승인') {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      await runMissionApprove(interaction);
+    } catch (err) {
+      console.error('[미션승인] 처리 실패:', err);
+      await interaction.editReply({
+        content: '미션 승인 처리 중 오류가 발생했어요. 😵 잠시 후 다시 시도해주세요.',
+      }).catch(() => { });
+    }
     return;
-  }
-
-  const { optKey, study } = match;
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-  try {
-    await runMissionStatus(interaction, optKey, study);
-  } catch (err) {
-    console.error(`[미션현황] ${optKey} 처리 실패:`, err);
-    await interaction.editReply({
-      content: '미션 현황을 불러오지 못했어요. 😵 잠시 후 다시 시도해주세요.',
-    }).catch(() => { });
   }
 }
 
@@ -207,6 +241,72 @@ async function runMissionStatus(interaction, optKey, study) {
     .setFooter({ text: `${today} 기준` });
 
   await interaction.editReply({ embeds: [embed] });
+}
+
+async function runMissionApprove(interaction) {
+  const channel = interaction.channel;
+
+  if (!channel?.isThread() || channel.parent?.type !== ChannelType.GuildForum
+      || channel.parentId !== process.env.MISSION_FORUM_CHANNEL_ID) {
+    await interaction.editReply({
+      content: '이 명령어는 미션 인증 포럼 스레드에서만 사용할 수 있어요.',
+    });
+    return;
+  }
+
+  const appliedTags = channel.appliedTags || [];
+  const matchedKeys = Object.entries(STUDIES)
+    .filter(([, study]) => study.forumTagId && appliedTags.includes(study.forumTagId))
+    .map(([optKey]) => optKey);
+
+  if (matchedKeys.length === 0) {
+    await interaction.editReply({
+      content: '스레드에 스터디 태그(옵션1/2)가 없어요. 태그를 추가한 뒤 다시 시도해 주세요.',
+    });
+    return;
+  }
+  if (matchedKeys.length > 1) {
+    await interaction.editReply({
+      content: '스레드에 옵션1과 옵션2 태그가 모두 있어요. 하나만 남기고 다시 시도해 주세요.',
+    });
+    return;
+  }
+
+  const optKey = matchedKeys[0];
+  const study = STUDIES[optKey];
+  const userId = channel.ownerId;
+  const week = interaction.options.getInteger('주차');
+
+  const missionData = loadJson(study.missionFile);
+  const weekEntry = missionData[String(week)];
+  if (!weekEntry) {
+    await interaction.editReply({
+      content: `[${study.label}] ${week}주차 미션 데이터를 찾을 수 없어요. 관리자에게 문의해 주세요.`,
+    });
+    return;
+  }
+
+  if (!Array.isArray(weekEntry.completed)) weekEntry.completed = [];
+  const idx = weekEntry.completed.indexOf(userId);
+  const isApproving = idx === -1;
+  if (isApproving) {
+    weekEntry.completed.push(userId);
+  } else {
+    weekEntry.completed.splice(idx, 1);
+  }
+
+  fs.writeFileSync(study.missionFile, JSON.stringify(missionData, null, 2));
+
+  let displayName = userId;
+  try {
+    const member = await interaction.guild.members.fetch(userId);
+    displayName = member.displayName;
+  } catch {}
+
+  const verb = isApproving ? '승인 완료' : '취소';
+  await interaction.editReply({
+    content: `[${study.label}] ${displayName} ${week}주차 ${verb}`,
+  });
 }
 
 module.exports = {

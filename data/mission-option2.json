@@ -1,6 +1,18 @@
 {
-  "1": { "chapters": "1장 ~ 4장", "completed": [] },
-  "2": { "chapters": "4장 ~ 7장", "completed": [] },
-  "3": { "chapters": "7장 ~ 8장 + 부록", "completed": [] },
-  "4": { "chapters": "프로젝트 주간", "completed": [] }
+  "1": {
+    "chapters": "1장 ~ 4장",
+    "completed": []
+  },
+  "2": {
+    "chapters": "4장 ~ 7장",
+    "completed": []
+  },
+  "3": {
+    "chapters": "7장 ~ 8장 + 부록",
+    "completed": []
+  },
+  "4": {
+    "chapters": "프로젝트 주간",
+    "completed": []
+  }
 }
