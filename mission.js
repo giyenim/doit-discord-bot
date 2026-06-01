@@ -182,11 +182,14 @@ async function runMissionStatus(interaction, optKey, study) {
     return;
   }
 
+  const lastWeek = week - 1;
+  const isFirstWeek = lastWeek < 1;
+
   const missionData = loadJson(study.missionFile);
-  const weekEntry = missionData[String(week)];
-  if (!weekEntry) {
+  const lastWeekEntry = isFirstWeek ? null : missionData[String(lastWeek)];
+  if (!isFirstWeek && !lastWeekEntry) {
     await interaction.editReply({
-      content: `[${study.label}] ${week}주차 미션 데이터를 찾을 수 없어요. 관리자에게 문의해 주세요.`,
+      content: `[${study.label}] ${lastWeek}주차 미션 데이터를 찾을 수 없어요. 관리자에게 문의해 주세요.`,
     });
     return;
   }
@@ -215,12 +218,22 @@ async function runMissionStatus(interaction, optKey, study) {
   const me = roleMembers.find((m) => m.id === interaction.user.id);
   const myDisplayName = me.displayName;
 
-  const thisWeekDone = (weekEntry.completed || []).filter((id) => roleMemberIds.has(id)).length;
+  let myLine;
+  if (isFirstWeek) {
+    myLine = `**${myDisplayName}**님은 아직 완료한 주차가 없어요.`;
+  } else {
+    const myMissing = missingWeeksFor(interaction.user.id, missionData, lastWeek);
+    myLine = myMissing.length === 0
+      ? `**${myDisplayName}**님은 ${lastWeek}주차 미션까지 완료했어요. ╰(*°▽°*)╯`
+      : `**${myDisplayName}**님은 미완료 미션이 있어요. ┗( T﹏T )┛\n [미완료: ${myMissing.map((w) => `Week ${w}`).join(', ')}]`;
+  }
 
-  const myMissing = missingWeeksFor(interaction.user.id, missionData, week);
-  const myLine = myMissing.length === 0
-    ? `**${myDisplayName}**님은 ${week}주차 미션까지 완료했어요. ╰(*°▽°*)╯`
-    : `**${myDisplayName}**님은 미완료 미션이 있어요. ┗( T﹏T )┛\n [미완료: ${myMissing.map((w) => `Week ${w}`).join(', ')}]`;
+  const chaptersLine = isFirstWeek
+    ? '**지난 주 챕터:** (아직 없음)'
+    : `**지난 주 챕터:** ${lastWeekEntry.chapters || '(미정)'}`;
+  const doneLine = isFirstWeek
+    ? '**지난 주 미션 완료 인원:** (아직 없음)'
+    : `**지난 주 미션 완료 인원:** ${(lastWeekEntry.completed || []).filter((id) => roleMemberIds.has(id)).length} / ${total}명`;
 
   const { percent: studyPercent } = studyProgress(missionData, roleMemberIds);
   const { percent: myPercent } = myProgress(interaction.user.id, missionData);
@@ -228,15 +241,15 @@ async function runMissionStatus(interaction, optKey, study) {
   const lines = [
     myLine,
     '',
-    `**이번 주 챕터:** ${weekEntry.chapters || '(미정)'}`,
-    `**이번 주 미션 완료 인원:** ${thisWeekDone} / ${total}명`,
+    chaptersLine,
+    doneLine,
     `**내 스터디 완료율:** ${progressBar(myPercent)} ${myPercent}%`,
     `**전체 스터디 완료율:** ${progressBar(studyPercent)} ${studyPercent}%`,
   ];
 
   const embed = new EmbedBuilder()
     .setColor(study.color)
-    .setTitle(`🖥️ [${study.label}] ${week}주차 현황`)
+    .setTitle(`🖥️ [${study.label}] 미션 현황`)
     .setDescription(lines.join('\n'))
     .setFooter({ text: `${today} 기준` });
 
