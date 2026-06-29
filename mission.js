@@ -68,6 +68,30 @@ function currentWeek(progressData, today) {
   return Number.isInteger(week) ? week : null;
 }
 
+// today('YYYY-MM-DD')가 속한 달력 주의 월요일을 'YYYY-MM-DD'로 반환.
+function thisWeekMonday(today) {
+  const [y, m, d] = today.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const offsetToMonday = (dt.getUTCDay() + 6) % 7; // 0=Sun..6=Sat → 월요일까지 거슬러 갈 일수
+  dt.setUTCDate(dt.getUTCDate() - offsetToMonday);
+  return dt.toISOString().slice(0, 10);
+}
+
+// "지난 주차": 이번 주 월요일보다 이전인 가장 가까운 진도일의 week.
+// 4주차 강의가 지난 금요일에 끝났다면 이번 주(월~) 시점에선 4주차가 지난 주차가 된다.
+function previousWeek(progressData, today) {
+  const monday = thisWeekMonday(today);
+  let best = null;
+  for (const dateKey of Object.keys(progressData)) {
+    if (dateKey < monday && (best === null || dateKey > best)) {
+      best = dateKey;
+    }
+  }
+  if (best === null) return null;
+  const week = progressData[best].week;
+  return Number.isInteger(week) ? week : null;
+}
+
 function missingWeeksFor(userId, missionData, currentWeek) {
   const missing = [];
   for (let w = 1; w <= currentWeek; w++) {
@@ -182,8 +206,8 @@ async function runMissionStatus(interaction, optKey, study) {
     return;
   }
 
-  const lastWeek = week - 1;
-  const isFirstWeek = lastWeek < 1;
+  const lastWeek = previousWeek(progressData, today);
+  const isFirstWeek = lastWeek === null;
 
   const missionData = loadJson(study.missionFile);
   const lastWeekEntry = isFirstWeek ? null : missionData[String(lastWeek)];
@@ -325,5 +349,5 @@ async function runMissionApprove(interaction) {
 module.exports = {
   commands,
   handle,
-  _test: { currentWeek, todayInSeoul, missingWeeksFor, studyProgress, myProgress, progressBar },
+  _test: { currentWeek, previousWeek, thisWeekMonday, todayInSeoul, missingWeeksFor, studyProgress, myProgress, progressBar },
 };
