@@ -129,6 +129,13 @@ function myProgress(userId, missionData) {
   return { done, total, percent };
 }
 
+function finishers(missionData, candidateIds) {
+  const weekKeys = Object.keys(missionData);
+  if (weekKeys.length === 0) return [];
+  return candidateIds.filter((id) =>
+    weekKeys.every((w) => (missionData[w].completed || []).includes(id)));
+}
+
 function progressBar(percent, length = 10) {
   const filled = Math.round((percent / 100) * length);
   return '█'.repeat(filled) + '░'.repeat(length - filled);
@@ -149,6 +156,11 @@ const commands = [
         .setRequired(true)
         .setMinValue(1),
     )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('완주자')
+    .setDescription('이 스터디의 모든 미션을 완료한 멤버를 보여줍니다 (관리자 전용)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .toJSON(),
 ];
@@ -175,6 +187,30 @@ async function handle(interaction) {
       console.error(`[미션현황] ${optKey} 처리 실패:`, err);
       await interaction.editReply({
         content: '미션 현황을 불러오지 못했어요. 😵 잠시 후 다시 시도해주세요.',
+      }).catch(() => { });
+    }
+    return;
+  }
+
+  if (interaction.commandName === '완주자') {
+    const match = findStudyByChannel(interaction.channelId);
+    if (!match) {
+      await interaction.reply({
+        content: '이 명령어는 스터디 채널에서만 사용할 수 있어요.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    const { optKey, study } = match;
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    try {
+      await runFinishers(interaction, optKey, study);
+    } catch (err) {
+      console.error(`[완주자] ${optKey} 처리 실패:`, err);
+      await interaction.editReply({
+        content: '완주자 명단을 불러오지 못했어요. 😵 잠시 후 다시 시도해주세요.',
       }).catch(() => { });
     }
     return;
@@ -280,6 +316,51 @@ async function runMissionStatus(interaction, optKey, study) {
   await interaction.editReply({ embeds: [embed] });
 }
 
+async function runFinishers(interaction, optKey, study) {
+  const missionData = loadJson(study.missionFile);
+  const weekKeys = Object.keys(missionData);
+  if (weekKeys.length === 0) {
+    await interaction.editReply({
+      content: `[${study.label}] 아직 등록된 미션이 없어요.`,
+    });
+    return;
+  }
+
+  if (interaction.guild.members.cache.size < interaction.guild.memberCount) {
+    await interaction.guild.members.fetch();
+  }
+  const role = await interaction.guild.roles.fetch(study.roleId);
+  if (!role) {
+    await interaction.editReply({
+      content: '스터디 역할을 찾을 수 없어요. 관리자에게 문의해 주세요.',
+    });
+    return;
+  }
+
+  const roleMembers = [...role.members.values()];
+  const roleMemberIds = roleMembers.map((m) => m.id);
+  const finisherIds = new Set(finishers(missionData, roleMemberIds));
+
+  const finisherMembers = roleMembers
+    .filter((m) => finisherIds.has(m.id))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ko'));
+
+  const embed = new EmbedBuilder()
+    .setColor(study.color)
+    .setTitle(`🏁 [${study.label}] 완주자`);
+
+  if (finisherMembers.length === 0) {
+    embed.setDescription('아직 모든 미션을 완료한 멤버가 없어요.');
+  } else {
+    embed.setDescription(
+      finisherMembers.map((m, i) => `${i + 1}. ${m.displayName}`).join('\n'),
+    );
+  }
+  embed.setFooter({ text: `전체 ${weekKeys.length}주차 완주 · ${finisherMembers.length}명` });
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
 async function runMissionApprove(interaction) {
   const channel = interaction.channel;
 
@@ -349,5 +430,5 @@ async function runMissionApprove(interaction) {
 module.exports = {
   commands,
   handle,
-  _test: { currentWeek, previousWeek, thisWeekMonday, todayInSeoul, missingWeeksFor, studyProgress, myProgress, progressBar },
+  _test: { currentWeek, previousWeek, thisWeekMonday, todayInSeoul, missingWeeksFor, studyProgress, myProgress, progressBar, finishers },
 };
